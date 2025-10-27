@@ -1,0 +1,76 @@
+name: Auto Sync AI Development Files
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Executes daily at 3 AM UTC
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install requests python-dotenv
+
+    - name: Organize development files
+      run: |
+        # Create directory structure if it doesn't exist
+        mkdir -p docs/daily_guides
+        mkdir -p src/{agents,personalities,memory,utils}
+        mkdir -p data/{conversations,models,patterns}
+        mkdir -p tests
+        
+        # Move any loose implementation files to proper directories
+        find . -name "day_*_implementation_guide.md" -not -path "./docs/*" -exec mv {} docs/daily_guides/ \; 2>/dev/null || true
+
+    - name: Update project status
+      run: |
+        # Update README with current date and progress
+        python -c "
+        import datetime
+        import re
+        
+        # Read current README
+        with open('README.md', 'r') as f:
+            content = f.read()
+        
+        # Update last sync date
+        today = datetime.datetime.now().strftime('%Y-%m-%d')
+        pattern = r'(\*Generated automatically by Randy.*)(\*|$)'
+        replacement = f'*Last updated: {today} - Generated automatically by Randy\'s AI development process*'
+        
+        if re.search(pattern, content):
+            content = re.sub(pattern, replacement, content)
+        else:
+            content += f'\n\n*Last updated: {today} - Generated automatically by Randy\'s AI development process*'
+        
+        with open('README.md', 'w') as f:
+            f.write(content)
+        "
+
+    - name: Commit and Push Changes
+      run: |
+        git config --global user.email 'randy.ai.bot@autodev.local'
+        git config --global user.name 'Randy AI Automator'
+        git add .
+        
+        # Check if there are changes to commit
+        if ! git diff --staged --quiet; then
+          git commit -m "Daily sync: update AI implementation guides - $(date +'%Y-%m-%d')"
+          git push
+        else
+          echo "No changes to commit"
+        fi
